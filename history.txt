@@ -1,0 +1,9 @@
+0718:
+-img_{n} -> shot_{n}_image
+-shot_1_image, shot_3_image, shot_10_image  와 같이 있을 때 처리 순서를 유지하도록 (수정전 처리순서: 1,10,3 ) 
+-샷1 비디오 생성 시 (text_ref) : shot_1_image-e를 제외하고 shot_1_image-* 패턴의 모든 이미지들을 레퍼이미지로 업로드 하도록.
+
+0719:
+run.sh 실행 시 먼저 OS 감지하고 분기처리로 아래 문제들 해결
+-Mac 에서 프롬프트 입력창 리셋 안되는 문제 해결.
+-Mac 에서 chrome-launch.sh 이용, Ubuntu: chrome-launch-ubuntu.sh 이용하도록.
