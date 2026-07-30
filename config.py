@@ -11,7 +11,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 # TARGET_URL = "https://openart.ai/suite/create-video/byte-plus-seedance-2"
-TARGET_URL = "https://openart.ai/suite/create-video/kling-3-omni?projectId=4f6XcLgKPRsHuC9mNAjy&folderId=QbnOllQFQAGniQrt3Nx5"
+TARGET_URL = "https://openart.ai/suite/animate-video/kling-3-omni?projectId=4f6XcLgKPRsHuC9mNAjy&folderId=MQTzaKPve9NlI8oGSnrS"
 # 4개 OpenArt 프로젝트가 공유 Chrome 인스턴스를 쓰므로 chrome_launcher.sh 가
 # OPENART_CDP_URL 을 export 한다. 단독 실행 시 default 9222 로 폴백.
 CDP_URL = os.environ.get("OPENART_CDP_URL", "http://localhost:9222")
@@ -20,9 +20,9 @@ CDP_URL = os.environ.get("OPENART_CDP_URL", "http://localhost:9222")
 # 입력 파일
 # ---------------------------------------------------------------------------
 # PROJECT_ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = Path("/Users/u/work/#2")
+PROJECT_ROOT = Path("/run/media/u/B62F9460757288E2/Work/신약/신5C#/tmp/#4/for_vds")
 # 스토리보드 JSON 경로. storyboard[*].shots[*] 를 모두 이어 붙여 순회한다.
-GEN_JSON = PROJECT_ROOT / "./2.json"
+GEN_JSON = PROJECT_ROOT / "./for_prompt_of_vds-3.json"
 
 # 샷 이미지가 모여 있는 디렉터리.
 # 파일명 규칙:
@@ -46,23 +46,23 @@ IMAGE_END_NAME_PATTERNS = ("shot_{n}_image-e", "shot_{n}-1_image-e")
 # ---------------------------------------------------------------------------
 # 처리 범위 (inclusive). None 이면 처음 / 끝.
 # ---------------------------------------------------------------------------
-START_SHOT: int | None = 24
-END_SHOT: int | None = 25
+START_SHOT: int | str | None = 12
+END_SHOT: int | str | None = 43
 
 # 명시적 샷 리스트. None 또는 [] 이면 START_SHOT/END_SHOT 사용.
 # 비어있지 않은 리스트가 들어 있으면 START_SHOT/END_SHOT 는 무시되고
 # 이 배열의 순서대로 처리된다. (예: [10, 5, 20] → 10 → 5 → 20)
 # gen.json 에 없는 번호는 경고 후 스킵.
-PROC_SHOTS: list[int] | None = []
+PROC_SHOTS: list[int | str] | None = []
 # ---------------------------------------------------------------------------
 # 대기 시간 (초)
 # ---------------------------------------------------------------------------
 # 업로드 완료를 감지할 때까지 최대 대기 시간
 UPLOAD_TIMEOUT = 50
 # 텍스트 입력 후 정적 대기 (에디터가 상태를 반영할 시간)
-WAIT_AFTER_TEXT = 2
+WAIT_AFTER_TEXT = 10
 # 제출 후 다음 샷 진입 전 정적 대기 (생성은 백그라운드에서 계속됨)
-WAIT_AFTER_SUBMIT = 5
+WAIT_AFTER_SUBMIT = 30
 # SPA 전환 / 네비게이션 대기
 NAV_TIMEOUT = 30
 
@@ -113,7 +113,7 @@ DEFAULT_MODE = MODE_START_END
 
 # MODE_TEXT_REF 로 처리할 샷 번호 목록.
 # 리스트에 포함된 샷은 자동으로 MODE_TEXT_REF, 나머지는 DEFAULT_MODE.
-SHOT_MODE: list[int] = [2,3,4,7,12,16,29,31,32,33,34,37,38,40,42,49,51,52,58,61,62,75]
+SHOT_MODE: list[int | str] = [3,"3-1",5,9,"15-1","15-2","16-2","16-3","16-4","17-1","18-2","19","19-3","19-4",25,26,32,"33-1",35,40]
 
 # 리셋 직후 / 모드 전환 직후 정적 대기 (초)
 WAIT_AFTER_RESET = 2
@@ -143,7 +143,7 @@ AUDIO_TOGGLE_BUTTON = f'{AUDIO_TOGGLE_CONTAINER} button[role="switch"]'
 # VIDEO_DURATION 은 "Ns" 형식(슬라이더 aria-valuemin=3, valuemax=15 사이의 정수+s).
 # VIDEO_RESOLUTION 은 라디오 버튼 텍스트 그대로 ("720p" / "1080p" / "4K").
 VIDEO_DURATION = "8s"
-VIDEO_RESOLUTION = "720p"
+VIDEO_RESOLUTION = "1080p"
 
 # Output 트리거 (popover 여는 div, type=button + aria-haspopup="dialog")
 OUTPUT_TRIGGER = 'div[aria-haspopup="dialog"]:has(div:text-is("Output"))'

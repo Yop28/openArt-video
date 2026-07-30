@@ -53,7 +53,7 @@ log.info("로그 파일: %s", _log_path)
 # ---------------------------------------------------------------------------
 @dataclass
 class Shot:
-    number: int
+    number: int | str
     prompt: str
     image: Optional[Path]
     image_end: Optional[Path] = None
@@ -71,10 +71,14 @@ def load_shots() -> list[Shot]:
         for s in scene.get("shots", []):
             n = s.get("shotNumber")
             if n is not None:
-                try:
-                    n = int(n)
-                except (ValueError, TypeError):
-                    log.warning("shotNumber 정수 변환 실패, 스킵: %r", n)
+                if isinstance(n, int):
+                    pass
+                elif isinstance(n, str):
+                    n = n.strip()
+                    if n.isdigit():
+                        n = int(n)
+                else:
+                    log.warning("shotNumber 타입 이상, 스킵: %r", n)
                     n = None
             prompt = (
                 s.get("videoPrompt", {}).get("englishPrompt") or ""
@@ -95,7 +99,7 @@ def load_shots() -> list[Shot]:
     if proc:
         by_number = {s.number: s for s in flat}
         selected: list[Shot] = []
-        missing: list[int] = []
+        missing: list[int | str] = []
         for n in proc:
             s = by_number.get(n)
             if s is None:
@@ -109,13 +113,32 @@ def load_shots() -> list[Shot]:
             )
         return selected
 
-    flat.sort(key=lambda x: x.number)
-    lo = config.START_SHOT or flat[0].number
-    hi = config.END_SHOT or flat[-1].number
-    return [s for s in flat if lo <= s.number <= hi]
+    flat.sort(key=lambda x: _shot_num_sort_key(x.number))
+    
+    lo_k = _shot_num_sort_key(config.START_SHOT) if config.START_SHOT is not None else None
+    hi_k = _shot_num_sort_key(config.END_SHOT) if config.END_SHOT is not None else None
+
+    def _in_range(n: int | str) -> bool:
+        k = _shot_num_sort_key(n)
+        if lo_k is not None and k < lo_k:
+            return False
+        if hi_k is not None and k > hi_k:
+            return False
+        return True
+
+    return [s for s in flat if _in_range(s.number)]
+
+def _shot_num_sort_key(n: int | str) -> list:
+    parts = []
+    for seg in re.split(r"(\d+)", str(n)):
+        if seg.isdigit():
+            parts.append((int(seg), ""))
+        elif seg:
+            parts.append((float("inf"), seg))
+    return parts
 
 
-def _resolve_image_with_patterns(n: int, patterns: tuple[str, ...]) -> Optional[Path]:
+def _resolve_image_with_patterns(n: int | str, patterns: tuple[str, ...]) -> Optional[Path]:
     for pattern in patterns:
         stem = pattern.format(n=n)
         for ext in config.IMAGE_EXTS:
@@ -125,7 +148,7 @@ def _resolve_image_with_patterns(n: int, patterns: tuple[str, ...]) -> Optional[
     return None
 
 
-def resolve_image(n: int) -> Optional[Path]:
+def resolve_image(n: int | str) -> Optional[Path]:
     """config.IMAGE_NAME_PATTERNS 우선순위에 따라 시작 이미지 파일을 찾는다.
 
     각 패턴마다 config.IMAGE_EXTS 를 순회해 최초로 존재하는 파일 반환.
@@ -133,7 +156,7 @@ def resolve_image(n: int) -> Optional[Path]:
     return _resolve_image_with_patterns(n, config.IMAGE_NAME_PATTERNS)
 
 
-def resolve_end_image(n: int) -> Optional[Path]:
+def resolve_end_image(n: int | str) -> Optional[Path]:
     """config.IMAGE_END_NAME_PATTERNS 우선순위에 따라 끝 이미지 파일을 찾는다.
 
     파일이 없으면 None (= end frame 업로드 안 함).
@@ -152,7 +175,7 @@ def _natural_sort_key(p: Path) -> list:
     return parts
 
 
-def resolve_extra_refs(n: int, main_img: Optional[Path]) -> list[Path]:
+def resolve_extra_refs(n: int | str, main_img: Optional[Path]) -> list[Path]:
     """text_ref 모드용 추가 레퍼런스 이미지 목록을 반환한다.
 
     main_img 의 stem(예: "shot_1_image")을 기준으로
@@ -431,7 +454,7 @@ def reset_references_sef(page: Page) -> None:
 
 
 # ---------- 모드 디스패처 ----------
-def resolve_mode(shot_number: int) -> str:
+def resolve_mode(shot_number: int | str) -> str:
     """shot_number 에 해당하는 모드를 반환한다.
 
     config.SHOT_MODE 가 list/set 이면 포함 여부로 MODE_TEXT_REF 판단.
@@ -705,18 +728,25 @@ def main() -> int:
 
     missing = [s.number for s in shots if s.image is None]
     if missing:
-        log.error(
-            "💥 이미지 없음 → 중단. 누락 샷 %d개: %s (IMAGE_DIR=%s)",
+        log.warning(
+            "⚠️  이미지 없는 샷 %d개 → 처리 시 스킵 예정: %s (IMAGE_DIR=%s)",
             len(missing), missing, config.IMAGE_DIR,
         )
-        return 4
 
     ok = 0
     failed: list[int] = []
+    skipped: list[int] = []
     aborted = False
     with sync_playwright() as pw:
         page = connect_page(pw)
         for shot in shots:
+            if shot.image is None:
+                log.warning(
+                    "⏭️  샷 %d 스킵: 이미지 파일 없음 (IMAGE_DIR=%s)",
+                    shot.number, config.IMAGE_DIR,
+                )
+                skipped.append(shot.number)
+                continue
             try:
                 process_shot(page, shot)
                 ok += 1
@@ -731,16 +761,21 @@ def main() -> int:
                 log.error("샷 %d 실패: %s", shot.number, exc)
                 _save_error_screenshot(page, shot.number)
 
-    log.info("🎉 완료: 성공 %d / 실패 %d %s%s",
-             ok, len(failed),
-             f"(실패 샷: {failed})" if failed else "",
-             " [중단됨]" if aborted else "")
+    log.info(
+        "🎉 완료: 성공 %d / 스킵 %d / 실패 %d%s%s%s",
+        ok,
+        len(skipped),
+        len(failed),
+        f" (스킵 샷: {skipped})" if skipped else "",
+        f" (실패 샷: {failed})" if failed else "",
+        " [중단됨]" if aborted else "",
+    )
     if aborted:
         return 3
     return 0 if not failed else 2
 
 
-def _save_error_screenshot(page: Page, n: int) -> None:
+def _save_error_screenshot(page: Page, n: int | str) -> None:
     try:
         path = config.LOG_DIR / f"error_shot_{n}.png"
         page.screenshot(path=str(path), full_page=True)
