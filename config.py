@@ -36,12 +36,12 @@ IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 
 # 이미지 파일명 후보 패턴. {n} 은 shotNumber 로 치환된다.
 # 앞에서부터 순서대로 IMAGE_EXTS 를 조합해 검색한다.
-IMAGE_NAME_PATTERNS = ("shot_{n}_image", "shot_{n}-1_image")
+IMAGE_NAME_PATTERNS = ("shot_{n}_image")
 
 # 끝 프레임(end frame) 이미지 파일명 후보 패턴. MODE_START_END 모드에서만 사용.
 # 이 패턴으로 파일이 발견되면 start frame 업로드 후 end frame 도 함께 업로드된다.
 # 발견되지 않으면 기존처럼 start frame 만으로 비디오를 생성한다.
-IMAGE_END_NAME_PATTERNS = ("shot_{n}_image-e", "shot_{n}-1_image-e")
+IMAGE_END_NAME_PATTERNS = ("shot_{n}_image-e")
 
 # ---------------------------------------------------------------------------
 # 처리 범위 (inclusive). None 이면 처음 / 끝.

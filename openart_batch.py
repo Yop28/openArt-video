@@ -453,14 +453,23 @@ def reset_references_sef(page: Page) -> None:
     )
 
 
-# ---------- 모드 디스패처 ----------
+def _normalize_shot_mode(mode_config: any) -> any:
+    """SHOT_MODE 내의 순수 숫자 문자열("19" 등)을 정수(19)로 변환한다."""
+    if isinstance(mode_config, dict):
+        return {int(k) if isinstance(k, str) and k.isdigit() else k: v for k, v in mode_config.items()}
+    if isinstance(mode_config, (list, set, tuple)):
+        new_seq = [int(x) if isinstance(x, str) and x.isdigit() else x for x in mode_config]
+        return type(mode_config)(new_seq) if not isinstance(mode_config, tuple) else tuple(new_seq)
+    return mode_config
+
+
 def resolve_mode(shot_number: int | str) -> str:
     """shot_number 에 해당하는 모드를 반환한다.
 
     config.SHOT_MODE 가 list/set 이면 포함 여부로 MODE_TEXT_REF 판단.
     (포함 → MODE_TEXT_REF, 미포함 → DEFAULT_MODE)
     """
-    shot_mode = config.SHOT_MODE
+    shot_mode = _normalize_shot_mode(config.SHOT_MODE)
     if isinstance(shot_mode, dict):
         return shot_mode.get(shot_number, config.DEFAULT_MODE)
     # list / set / tuple → 포함되면 MODE_TEXT_REF
