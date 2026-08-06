@@ -46,7 +46,7 @@ IMAGE_END_NAME_PATTERNS = ("shot_{n}_image-e",)
 # ---------------------------------------------------------------------------
 # 처리 범위 (inclusive). None 이면 처음 / 끝.
 # ---------------------------------------------------------------------------
-START_SHOT: int | str | None = 1
+START_SHOT: int | str | None = 13
 END_SHOT: int | str | None = 13
 
 # 명시적 샷 리스트. None 또는 [] 이면 START_SHOT/END_SHOT 사용.

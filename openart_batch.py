@@ -116,13 +116,15 @@ def load_shots() -> list[Shot]:
     flat.sort(key=lambda x: _shot_num_sort_key(x.number))
     
     lo_k = _shot_num_sort_key(config.START_SHOT) if config.START_SHOT is not None else None
-    hi_k = _shot_num_sort_key(config.END_SHOT) if config.END_SHOT is not None else None
+    # END_SHOT=13 이면 '13-1', '13-2' 등 서브샷도 포함하기 위해
+    # 선행 정수+1 을 exclusive upper bound 로 사용한다.
+    hi_k = _shot_end_exclusive_key(config.END_SHOT) if config.END_SHOT is not None else None
 
     def _in_range(n: int | str) -> bool:
         k = _shot_num_sort_key(n)
         if lo_k is not None and k < lo_k:
             return False
-        if hi_k is not None and k > hi_k:
+        if hi_k is not None and k >= hi_k:  # exclusive: n+1 이상 제외
             return False
         return True
 
@@ -136,6 +138,18 @@ def _shot_num_sort_key(n: int | str) -> list:
         elif seg:
             parts.append((float("inf"), seg))
     return parts
+
+
+def _shot_end_exclusive_key(n: int | str) -> list:
+    """END_SHOT n 에 대해 n 과 그 모든 서브샷(n-1, n-2 …)을 포함하는
+    exclusive upper bound sort key 를 반환한다.
+
+    선행 정수를 파싱해 +1 한 값의 sort key 를 반환하므로,
+    비교 시 ``k >= hi_k`` 조건으로 n+1 이상은 모두 제외된다.
+    """
+    m = re.match(r"\d+", str(n))
+    leading = int(m.group()) if m else 0
+    return _shot_num_sort_key(leading + 1)
 
 
 def _resolve_image_with_patterns(n: int | str, patterns: tuple[str, ...]) -> Optional[Path]:
