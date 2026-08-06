@@ -11,7 +11,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 # TARGET_URL = "https://openart.ai/suite/create-video/byte-plus-seedance-2"
-TARGET_URL = "https://openart.ai/suite/animate-video/kling-3-omni?projectId=4f6XcLgKPRsHuC9mNAjy&folderId=MQTzaKPve9NlI8oGSnrS"
+TARGET_URL = "https://openart.ai/suite/animate-video/kling-3-omni?projectId=EcskdXRzKIhk85frV7OX&folderId=jYQF8I2Hj9AGnes5oWsT"
 # 4개 OpenArt 프로젝트가 공유 Chrome 인스턴스를 쓰므로 chrome_launcher.sh 가
 # OPENART_CDP_URL 을 export 한다. 단독 실행 시 default 9222 로 폴백.
 CDP_URL = os.environ.get("OPENART_CDP_URL", "http://localhost:9222")
@@ -20,9 +20,9 @@ CDP_URL = os.environ.get("OPENART_CDP_URL", "http://localhost:9222")
 # 입력 파일
 # ---------------------------------------------------------------------------
 # PROJECT_ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = Path("/run/media/u/B62F9460757288E2/Work/신약/신5C#/tmp/#4/for_vds")
+PROJECT_ROOT = Path("/run/media/u/data/7C#/1-pick")
 # 스토리보드 JSON 경로. storyboard[*].shots[*] 를 모두 이어 붙여 순회한다.
-GEN_JSON = PROJECT_ROOT / "./for_prompt_of_vds-3.json"
+GEN_JSON = PROJECT_ROOT / "./1.json"
 
 # 샷 이미지가 모여 있는 디렉터리.
 # 파일명 규칙:
@@ -36,18 +36,18 @@ IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 
 # 이미지 파일명 후보 패턴. {n} 은 shotNumber 로 치환된다.
 # 앞에서부터 순서대로 IMAGE_EXTS 를 조합해 검색한다.
-IMAGE_NAME_PATTERNS = ("shot_{n}_image")
+IMAGE_NAME_PATTERNS = ("shot_{n}_image",)
 
 # 끝 프레임(end frame) 이미지 파일명 후보 패턴. MODE_START_END 모드에서만 사용.
 # 이 패턴으로 파일이 발견되면 start frame 업로드 후 end frame 도 함께 업로드된다.
 # 발견되지 않으면 기존처럼 start frame 만으로 비디오를 생성한다.
-IMAGE_END_NAME_PATTERNS = ("shot_{n}_image-e")
+IMAGE_END_NAME_PATTERNS = ("shot_{n}_image-e",)
 
 # ---------------------------------------------------------------------------
 # 처리 범위 (inclusive). None 이면 처음 / 끝.
 # ---------------------------------------------------------------------------
-START_SHOT: int | str | None = 12
-END_SHOT: int | str | None = 43
+START_SHOT: int | str | None = 1
+END_SHOT: int | str | None = 13
 
 # 명시적 샷 리스트. None 또는 [] 이면 START_SHOT/END_SHOT 사용.
 # 비어있지 않은 리스트가 들어 있으면 START_SHOT/END_SHOT 는 무시되고
@@ -113,7 +113,7 @@ DEFAULT_MODE = MODE_START_END
 
 # MODE_TEXT_REF 로 처리할 샷 번호 목록.
 # 리스트에 포함된 샷은 자동으로 MODE_TEXT_REF, 나머지는 DEFAULT_MODE.
-SHOT_MODE: list[int | str] = [3,"3-1",5,9,"15-1","15-2","16-2","16-3","16-4","17-1","18-2","19","19-3","19-4",25,26,32,"33-1",35,40]
+SHOT_MODE: list[int | str] = [4,7]
 
 # 리셋 직후 / 모드 전환 직후 정적 대기 (초)
 WAIT_AFTER_RESET = 2
