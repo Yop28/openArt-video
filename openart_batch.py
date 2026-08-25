@@ -745,7 +745,7 @@ def main() -> int:
         )
     else:
         log.info(
-            "총 %d개 샷 (#%d ~ #%d) 처리 예정",
+            "총 %d개 샷 (#%s ~ #%s) 처리 예정",
             len(shots), shots[0].number, shots[-1].number,
         )
 

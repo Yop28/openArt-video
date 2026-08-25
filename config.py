@@ -11,7 +11,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 
 # TARGET_URL = "https://openart.ai/suite/create-video/byte-plus-seedance-2"
-TARGET_URL = "https://openart.ai/suite/animate-video/kling-3-omni?projectId=EcskdXRzKIhk85frV7OX&folderId=jYQF8I2Hj9AGnes5oWsT"
+TARGET_URL = "https://openart.ai/suite/create-video/kling-3-omni?projectId=EcskdXRzKIhk85frV7OX&folderId=RLlhMJs8xYWxHjPvSTMp"
 # 4개 OpenArt 프로젝트가 공유 Chrome 인스턴스를 쓰므로 chrome_launcher.sh 가
 # OPENART_CDP_URL 을 export 한다. 단독 실행 시 default 9222 로 폴백.
 CDP_URL = os.environ.get("OPENART_CDP_URL", "http://localhost:9222")
@@ -20,9 +20,9 @@ CDP_URL = os.environ.get("OPENART_CDP_URL", "http://localhost:9222")
 # 입력 파일
 # ---------------------------------------------------------------------------
 # PROJECT_ROOT = Path(__file__).resolve().parent
-PROJECT_ROOT = Path("/run/media/u/data/7C#/1-pick")
+PROJECT_ROOT = Path("/run/media/u/data/7C#/#4")
 # 스토리보드 JSON 경로. storyboard[*].shots[*] 를 모두 이어 붙여 순회한다.
-GEN_JSON = PROJECT_ROOT / "./1.json"
+GEN_JSON = PROJECT_ROOT / "./storyboard.json"
 
 # 샷 이미지가 모여 있는 디렉터리.
 # 파일명 규칙:
@@ -46,8 +46,8 @@ IMAGE_END_NAME_PATTERNS = ("shot_{n}_image-e",)
 # ---------------------------------------------------------------------------
 # 처리 범위 (inclusive). None 이면 처음 / 끝.
 # ---------------------------------------------------------------------------
-START_SHOT: int | str | None = 13
-END_SHOT: int | str | None = 13
+START_SHOT: int | str | None = 5
+END_SHOT: int | str | None = 26
 
 # 명시적 샷 리스트. None 또는 [] 이면 START_SHOT/END_SHOT 사용.
 # 비어있지 않은 리스트가 들어 있으면 START_SHOT/END_SHOT 는 무시되고
@@ -96,7 +96,7 @@ PROMPT_EDITOR = (
 SUBMIT_BUTTON_HIDDEN = '[data-prompt-input="true"] button[type="submit"]'
 # 업로드된 썸네일 각각의 × 버튼
 REF_REMOVE_BUTTON = (
-    f'{VISUAL_REF_ROOT} button:has(svg[aria-label="CloseBold"])'
+    f'{VISUAL_REF_ROOT} button:has(svg[data-icon="CloseBold"])'
 )
 
 # 이미지 리셋 타임아웃 (초) — 모든 × 클릭 후 카운터가 0 이 될 때까지.
@@ -113,7 +113,7 @@ DEFAULT_MODE = MODE_START_END
 
 # MODE_TEXT_REF 로 처리할 샷 번호 목록.
 # 리스트에 포함된 샷은 자동으로 MODE_TEXT_REF, 나머지는 DEFAULT_MODE.
-SHOT_MODE: list[int | str] = [4,7]
+SHOT_MODE: list[int | str] = [3,5,10,11,12,"13-3",14,"14-1",15,16,17,19,20,22,"25-1"]
 
 # 리셋 직후 / 모드 전환 직후 정적 대기 (초)
 WAIT_AFTER_RESET = 2
