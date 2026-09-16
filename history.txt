@@ -11,3 +11,18 @@ run.sh 실행 시 먼저 OS 감지하고 분기처리로 아래 문제들 해결
 0730:
 -처리할 샷들중 레퍼/시작 이미지가 없으면 종료되는 문제 -> 스킵하고 그외 파일 처리하도록
 -샷16, 샷16-1, 샷16-2, ... , 샷17, .. 와 같이 처리가능하도록 수정.
+
+0912:
+-openart.ai 신규 UI 개편 반영:
+  - 상단 헤더 'Switch tool' 버튼 및 sidecar 메뉴를 통한 'Text to Video' / 'Frame to Video' 도구 전환 지원
+  - 프롬프트 초기화 시 'Clear Prompt' 버튼 우선 사용
+  - Output 설정 라벨("16:9 | 8s | 1080p") 부분 일치(contains) 검사로 변경
+  - 신규 생성 버튼 속성(data-generate-btn="true") 우선 타겟팅
+  - Audio 외 Auto Polish, Multi-shot 스위치 비활성화(Off) 보장
+0916:
+- 샷 이미지 업로드 비정상/취소 문제 해결:
+  - wait_for_upload_tref 다단계 대기 적용 (카운터 증가 + 스피너 소멸 + cdn.openart.ai 영구 URL 확정 대기)
+  - wait_for_upload_sef 스피너 소멸 대기 추가
+  - fill_prompt 내 불필요한 Clear Prompt 재호출 제거 (업로드 진행 상태 교란 방지)
+  - select_mode 에서 Switch tool 버튼 JS 직접 클릭 적용 (Playwright 포인터 가림 타임아웃 방지)
+  - Kling 3.0 Omni 검열(Risk Control System 1002) 대응: storyboard.json 내 트리거 단어(blood, violent, brawl 등) 순화 완료

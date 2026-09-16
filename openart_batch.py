@@ -377,25 +377,118 @@ class ResetError(RuntimeError):
 
 # ---------- 모드 선택 ----------
 def select_mode(page: Page, mode: str) -> None:
-    sel = config.MODE_RADIO[mode]
-    btn = page.locator(sel).first
-    if btn.count() == 0:
-        raise RuntimeError(f"모드 라디오 버튼 미발견: {sel}")
-    if btn.get_attribute("aria-checked") == "true":
+    target_tool = config.MODE_TOOL_NAMES.get(mode)
+
+    # 1. 신규 UI: 헤더 h1 텍스트 및 Switch Tool 메뉴를 통한 전환
+    header_title_locator = page.locator(config.TOOL_HEADER_TITLE).first
+    if header_title_locator.count() > 0 and header_title_locator.is_visible():
+        current_tool = header_title_locator.inner_text().strip()
+        if current_tool == target_tool:
+            return
+        log.info("모드 전환 필요: '%s' → '%s'", current_tool, target_tool)
+        switched = page.evaluate(
+            """() => {
+                const btn = document.querySelector('header button[aria-label="Switch tool"]');
+                if (btn) { btn.click(); return true; }
+                const header = document.querySelector('header');
+                if (header) { header.click(); return true; }
+                return false;
+            }"""
+        )
+        if not switched:
+            page.locator(config.TOOL_HEADER).first.click()
+
+        page.locator(config.SIDECAR_DIALOG).wait_for(state="visible", timeout=5000)
+        time.sleep(0.3)
+
+        target_btn = page.locator(
+            f'{config.SIDECAR_DIALOG} div[role="button"]:has(p:text-is("{target_tool}"))'
+        ).first
+        if target_btn.count() == 0 or not target_btn.is_visible():
+            target_btn = page.locator(
+                f'{config.SIDECAR_DIALOG} div[role="button"]:has-text("{target_tool}")'
+            ).first
+        if target_btn.count() == 0 or not target_btn.is_visible():
+            raise RuntimeError(f"사이드카 메뉴에서 '{target_tool}' 도구를 찾지 못했습니다.")
+        target_btn.click()
+        time.sleep(config.WAIT_AFTER_MODE)
+
+        page.wait_for_selector(
+            f'{config.TOOL_HEADER_TITLE}:has-text("{target_tool}")',
+            timeout=5000,
+        )
+
+        sidecar = page.locator(config.SIDECAR_DIALOG)
+        if sidecar.count() > 0 and sidecar.is_visible():
+            close_btn = page.locator(config.SIDECAR_CLOSE_BUTTON).first
+            if close_btn.count() > 0 and close_btn.is_visible():
+                close_btn.click()
+            else:
+                page.keyboard.press("Escape")
+            time.sleep(0.2)
+        log.info("✅ 모드 전환 완료: '%s'", target_tool)
         return
-    btn.click()
-    time.sleep(config.WAIT_AFTER_MODE)
+
+    # 2. 구버전 UI 폴백: radio 버튼 선택
+    sel = config.MODE_RADIO.get(mode)
+    if sel:
+        btn = page.locator(sel).first
+        if btn.count() > 0 and btn.is_visible():
+            if btn.get_attribute("aria-checked") == "true":
+                return
+            btn.click()
+            time.sleep(config.WAIT_AFTER_MODE)
+            return
+    raise RuntimeError(f"모드 라디오/헤더 버튼 미발견 (mode={mode})")
 
 
 # ---------- Text with Reference 업로드/리셋/대기 ----------
 def wait_for_upload_tref(page: Page, baseline: int) -> None:
+    """Text with Reference 모드 이미지 업로드 완료 대기.
+
+    1) 카운터 증가 또는 썸네일 등장으로 업로드 개시 확인
+    2) 로딩 스피너 종료 대기
+    3) 임시 blob: 주소가 실제 CDN(cdn.openart.ai) 영구 주소로 확정될 때까지 대기
+    """
     deadline = time.time() + config.UPLOAD_TIMEOUT
+    target_count = baseline + 1
+
+    # 1단계: 업로드 시작 감지 (썸네일 등장 또는 카운터 증가)
     while time.time() < deadline:
-        if read_counter(page) >= baseline + 1:
-            return
+        ref_imgs = page.locator(f'{config.VISUAL_REF_ROOT} img[alt="Reference"]').all()
+        cnt = read_counter(page)
+        if len(ref_imgs) >= target_count or cnt >= target_count:
+            break
+        time.sleep(0.2)
+    else:
+        raise PWTimeout(
+            f"업로드 시작 감지 실패 (baseline={baseline}, >{config.UPLOAD_TIMEOUT}s)"
+        )
+
+    # 2단계: 스피너 종료 및 CDN 영구 URL 확정 대기
+    while time.time() < deadline:
+        spinners = page.locator(
+            f'{config.VISUAL_REF_ROOT} [class*="spin"], '
+            f'{config.VISUAL_REF_ROOT} [class*="animate-spin"], '
+            f'{config.VISUAL_REF_ROOT} [class*="loading"]'
+        ).count()
+        ref_imgs = page.locator(f'{config.VISUAL_REF_ROOT} img[alt="Reference"]').all()
+        cnt = read_counter(page)
+
+        if spinners == 0 and len(ref_imgs) >= target_count and cnt >= target_count:
+            all_cdn = True
+            for r in ref_imgs[:target_count]:
+                src = r.get_attribute("src") or ""
+                if not src or src.startswith("blob:") or "cdn.openart.ai" not in src:
+                    all_cdn = False
+                    break
+            if all_cdn:
+                time.sleep(0.5)  # UI 상태 안정화 대기
+                return
         time.sleep(0.3)
+
     raise PWTimeout(
-        f"업로드 완료 감지 실패 (baseline={baseline}, >{config.UPLOAD_TIMEOUT}s)"
+        f"업로드 CDN 확정 완료 감지 실패 (baseline={baseline}, >{config.UPLOAD_TIMEOUT}s)"
     )
 
 
@@ -434,15 +527,23 @@ def reset_references_tref(page: Page) -> None:
 
 # ---------- Start/End Frame 업로드/리셋/대기 ----------
 def wait_for_upload_sef(page: Page, baseline: int = 0) -> None:
-    """Remove 버튼 개수가 baseline+1 이상이 될 때까지 대기.
+    """Remove 버튼 개수가 baseline+1 이상이 되고 스피너가 사라질 때까지 대기.
 
     baseline=0 → 한 장 업로드 후 사용 (start frame).
     baseline=1 → start 가 이미 올라간 뒤 end frame 업로드 후 사용.
     """
     deadline = time.time() + config.UPLOAD_TIMEOUT
+    target_count = baseline + 1
     while time.time() < deadline:
-        if page.locator(config.SEF_REMOVE_BUTTON).count() >= baseline + 1:
-            return
+        removes = page.locator(config.SEF_REMOVE_BUTTON).count()
+        if removes >= target_count:
+            spinners = page.locator(
+                "div:has(> div:text-is(\"Set start & end frame\")) ~ div [class*=\"spin\"], "
+                "div:has(> div:text-is(\"Set start & end frame\")) ~ div [class*=\"loading\"]"
+            ).count()
+            if spinners == 0:
+                time.sleep(0.5)
+                return
         time.sleep(0.3)
     raise PWTimeout(
         f"[SEF] 업로드 완료 감지 실패 (baseline={baseline}, >{config.UPLOAD_TIMEOUT}s)"
@@ -562,39 +663,76 @@ def _clear_editor(page: Page) -> None:
 
 
 def reset_prompt(page: Page) -> None:
-    """프롬프트 에디터 내용을 비운다."""
+    """프롬프트 에디터 내용을 비운다. Clear Prompt 버튼 클릭 우선, 키보드/JS 폴백."""
     try:
-        _focus_editor(page)
-        _clear_editor(page)
+        clear_btn = page.locator(config.CLEAR_PROMPT_BUTTON).first
+        if clear_btn.count() and clear_btn.is_visible() and clear_btn.is_enabled():
+            clear_btn.click()
+            time.sleep(0.2)
+
+        remaining = page.evaluate(
+            "(sel) => (document.querySelector(sel)?.innerText || '').trim()",
+            config.PROMPT_EDITOR,
+        )
+        if remaining:
+            _focus_editor(page)
+            _clear_editor(page)
     except Exception as exc:
         log.warning("프롬프트 리셋 경고: %s", exc)
+        try:
+            _focus_editor(page)
+            _clear_editor(page)
+        except Exception:
+            pass
 
 
 def fill_prompt(page: Page, text: str) -> None:
+    # 이미 Step 2에서 초기화되었으나 잔여 텍스트가 남아있다면 키보드/JS로 정리
+    remaining = page.evaluate(
+        "(sel) => (document.querySelector(sel)?.innerText || '').trim()",
+        config.PROMPT_EDITOR,
+    )
+    if remaining:
+        _focus_editor(page)
+        _clear_editor(page)
     _focus_editor(page)
-    # 기존 내용 제거 후 새 텍스트 입력
-    _clear_editor(page)
     page.locator(config.PROMPT_EDITOR).first.type(text, delay=5)
 
 
 # ---------- 생성 옵션 (submit 직전 적용) ----------
+def ensure_switches_off(page: Page) -> None:
+    """Audio, Auto Polish, Multi-shot 토글이 On 이면 Off 로 끈다."""
+    switches = [
+        ("Audio", getattr(config, "AUDIO_TOGGLE_BUTTON", None)),
+        ("Auto Polish", getattr(config, "AUTO_POLISH_SWITCH", None)),
+        ("Multi-shot", getattr(config, "MULTI_SHOT_SWITCH", None)),
+    ]
+    for name, sel in switches:
+        if not sel:
+            continue
+        try:
+            btn = page.locator(sel).first
+            if btn.count() == 0 or not btn.is_visible():
+                continue
+            if btn.get_attribute("aria-checked") == "true":
+                btn.click()
+                log.info("  → %s Off 변경", name)
+                time.sleep(0.1)
+        except Exception as exc:
+            log.warning("%s 스위치 설정 확인 중 경고: %s", name, exc)
+
+
 def ensure_audio_off(page: Page) -> None:
-    """Audio 토글이 On 이면 Off 로 끈다. 이미 Off 면 아무것도 하지 않는다."""
-    btn = page.locator(config.AUDIO_TOGGLE_BUTTON).first
-    if btn.count() == 0:
-        log.warning("Audio 토글 버튼 미발견, 스킵")
-        return
-    if btn.get_attribute("aria-checked") == "true":
-        btn.click()
-        log.info("  → Audio Off 변경")
+    """하위 호환용 (Audio 포함 모든 부가 스위치 Off 보장)"""
+    ensure_switches_off(page)
 
 
 def configure_output(page: Page) -> None:
     """Output popover 를 열어 Duration / Resolution 을 설정값에 맞춘다.
 
-    트리거 표시 텍스트가 이미 "{VIDEO_DURATION} | {VIDEO_RESOLUTION}" 와 일치하면 스킵.
+    트리거 표시 텍스트에 이미 VIDEO_DURATION 과 VIDEO_RESOLUTION 이 모두 포함되어 있으면 스킵.
+    (예: "16:9 | 8s | 1080p")
     """
-    target_label = f"{config.VIDEO_DURATION} | {config.VIDEO_RESOLUTION}"
     trigger = page.locator(config.OUTPUT_TRIGGER).first
     if trigger.count() == 0:
         log.warning("Output 트리거 미발견, 스킵")
@@ -604,7 +742,9 @@ def configure_output(page: Page) -> None:
         current_label = trigger.locator(config.OUTPUT_TRIGGER_VALUE).first.inner_text(timeout=1000).strip()
     except Exception:
         current_label = ""
-    if current_label == target_label:
+
+    # 부분 일치(contains) 검사: "16:9 | 8s | 1080p" 내에 "8s"와 "1080p"가 모두 존재하는지 확인
+    if config.VIDEO_DURATION in current_label and config.VIDEO_RESOLUTION in current_label:
         return
 
     trigger.click()
@@ -633,7 +773,7 @@ def configure_output(page: Page) -> None:
 
     # 닫기
     page.keyboard.press("Escape")
-    log.info("  → Output 설정: %s", target_label)
+    log.info("  → Output 설정: %s (현재 라벨: %s)", f"{config.VIDEO_DURATION} | {config.VIDEO_RESOLUTION}", current_label)
 
 
 def submit(page: Page) -> None:
@@ -645,6 +785,16 @@ def submit(page: Page) -> None:
         page.keyboard.press("Enter")
         return
     if strat == "generate_button":
+        # 1순위: 신규 data-generate-btn="true" 속성 버튼
+        gen_sel = getattr(config, "SUBMIT_BUTTON_GENERATOR", None)
+        if gen_sel:
+            gen_btn = page.locator(gen_sel).first
+            if gen_btn.count() and gen_btn.is_visible() and gen_btn.is_enabled():
+                gen_btn.click()
+                log.info("  → Generate 버튼 클릭 (data-generate-btn)")
+                return
+
+        # 2순위: 레이블 텍스트 순회
         for label in config.SUBMIT_BUTTON_LABELS:
             btn = page.locator(
                 f'button[type="submit"]:has-text("{label}")'
@@ -654,7 +804,7 @@ def submit(page: Page) -> None:
                 log.info("  → '%s' 버튼 클릭", label)
                 return
         raise RuntimeError(
-            f"제출 버튼 탐색 실패 (labels={config.SUBMIT_BUTTON_LABELS})"
+            f"제출 버튼 탐색 실패 (generator={getattr(config, 'SUBMIT_BUTTON_GENERATOR', None)}, labels={config.SUBMIT_BUTTON_LABELS})"
         )
     raise ValueError(f"unknown SUBMIT_STRATEGY: {strat}")
 
@@ -702,12 +852,18 @@ def process_shot(page: Page, shot: Shot) -> None:
         log.info("%s: 메인 이미지 업로드 요청 (%s)", tag, shot.image.name)
         wait_for_upload_tref(page, baseline=0)
         log.info("%s: ✅ 메인 이미지 업로드 완료", tag)
-        for idx, ref_img in enumerate(shot.extra_refs, start=1):
+        max_extra = max(0, getattr(config, "MAX_VISUAL_REFS", 7) - 1)
+        extra_to_upload = shot.extra_refs
+        if len(extra_to_upload) > max_extra:
+            log.warning("%s: 추가 레퍼런스 수(%d개)가 최대 한도(%d개)를 초과하여 상위 %d개만 사용합니다.",
+                        tag, len(extra_to_upload), max_extra, max_extra)
+            extra_to_upload = extra_to_upload[:max_extra]
+        for idx, ref_img in enumerate(extra_to_upload, start=1):
             upload_image_tref(page, ref_img)
             log.info("%s: 추가 레퍼런스[%d/%d] 업로드 요청 (%s)",
-                     tag, idx, len(shot.extra_refs), ref_img.name)
+                     tag, idx, len(extra_to_upload), ref_img.name)
             wait_for_upload_tref(page, baseline=idx)
-            log.info("%s: ✅ 추가 레퍼런스[%d/%d] 업로드 완료", tag, idx, len(shot.extra_refs))
+            log.info("%s: ✅ 추가 레퍼런스[%d/%d] 업로드 완료", tag, idx, len(extra_to_upload))
     else:
         upload_for_mode(page, mode, shot.image)
         log.info("%s: 업로드 요청 보냄", tag)
@@ -719,8 +875,8 @@ def process_shot(page: Page, shot: Shot) -> None:
     log.info("%s: ✅ 텍스트 입력 완료 (%d자)", tag, len(shot.prompt))
     time.sleep(config.WAIT_AFTER_TEXT)
 
-    # 5) 생성 옵션 설정 (Audio Off, Output Duration/Resolution)
-    ensure_audio_off(page)
+    # 5) 생성 옵션 설정 (Audio/Auto Polish/Multi-shot Off, Output Duration/Resolution)
+    ensure_switches_off(page)
     configure_output(page)
 
     # 6) 제출 → 대기
